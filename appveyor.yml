@@ -1,0 +1,15 @@
+version: '{build}'
+image: Visual Studio 2022
+
+branches:
+  only:
+    - main
+
+build_script:
+  - ps: .\Build.ps1
+
+test: off
+
+artifacts:
+  - path: dist\ValleBroteUpdater.exe
+    name: ValleBroteUpdater
