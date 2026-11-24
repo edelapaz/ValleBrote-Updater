@@ -1,0 +1,12 @@
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="ValleBroteUpdater.exe" product-name="Valle Brote Updater"
+             product-version="${version}" file-version="${version}.0"
+             original-filename="ValleBroteUpdater.exe">
+      <authenticode-sign hash-algorithm="sha256" />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

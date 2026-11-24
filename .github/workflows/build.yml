@@ -1,0 +1,71 @@
+name: Build Valle Brote Updater
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: Submit the build to SignPath for release approval
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and run the updater self-test
+        id: build
+        shell: pwsh
+        run: |
+          ./Build.ps1
+          "version=$((Get-Content VERSION -Raw).Trim())" >> $env:GITHUB_OUTPUT
+      - name: Upload unsigned updater
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: ValleBroteUpdater-unsigned
+          path: dist/ValleBroteUpdater.exe
+          if-no-files-found: error
+      - name: Submit for SignPath approval
+        id: sign
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.sign
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(steps.build.outputs.version) }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 1200
+          output-artifact-directory: signed
+      - name: Verify Authenticode and timestamp
+        if: steps.sign.outcome == 'success'
+        shell: pwsh
+        run: |
+          $file = './signed/ValleBroteUpdater.exe'
+          $signature = Get-AuthenticodeSignature -LiteralPath $file
+          if ($signature.Status -ne 'Valid' -or !$signature.TimeStamperCertificate) {
+            throw "Invalid or missing signature or timestamp ($($signature.Status))."
+          }
+          Get-FileHash -LiteralPath $file -Algorithm SHA256
+      - name: Upload signed updater
+        if: steps.sign.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ValleBroteUpdater-signed
+          path: signed/ValleBroteUpdater.exe
+          if-no-files-found: error
